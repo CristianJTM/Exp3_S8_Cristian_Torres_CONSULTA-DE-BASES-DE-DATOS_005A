@@ -98,66 +98,75 @@ SELECT
     t.stock_critico
 FROM (
     SELECT
-        l.libroid AS libro_id,
-        l.nombre_libro,
-        COUNT(e.ejemplarid) AS total_ejemplares,
-        SUM(
-            CASE
-                WHEN p.ejemplarid IS NOT NULL THEN 1
-                ELSE 0
+    l.libroid AS libro_id,
+    l.nombre_libro AS nombre_libro,
+    COUNT(DISTINCT e.ejemplarid) AS total_ejemplares,
+    COUNT(
+        DISTINCT CASE
+            WHEN p.empleadoid IN (190, 180, 150)
+            THEN e.ejemplarid
+        END
+    ) AS en_prestamo,
+    COUNT(DISTINCT e.ejemplarid)
+    -
+    COUNT(
+        DISTINCT CASE
+            WHEN p.empleadoid IN (190, 180, 150)
+            THEN e.ejemplarid
+        END
+    ) AS disponibles,
+
+    ROUND(
+        100
+        * COUNT(
+            DISTINCT CASE
+                WHEN p.empleadoid IN (190, 180, 150)
+                THEN e.ejemplarid
             END
-        ) AS en_prestamo,
-        COUNT(e.ejemplarid)
-        -
-        SUM(
-            CASE
-                WHEN p.ejemplarid IS NOT NULL THEN 1
-                ELSE 0
-            END
-        ) AS disponibles,
-        ROUND(
-            100.0
-            * SUM(
-                CASE
-                    WHEN p.ejemplarid IS NOT NULL THEN 1
-                    ELSE 0
-                END
-            )
-            / NULLIF(COUNT(e.ejemplarid), 0),
-            2
-        ) AS porcentaje_prestamo,
---No coincide con lo mostrado en la imagen, pero si con lo que pide en el enunciado
-        CASE
-            WHEN
-                COUNT(e.ejemplarid)
+        )
+        / NULLIF(COUNT(DISTINCT e.ejemplarid), 0),
+        0
+    ) AS porcentaje_prestamo,
+
+/*ESTA COLUMNA NO COINCIDE CON LA IMAGEN DE LA GUIA PERO SI CON EL ENUNCIADO
+Si existen más de 2 ejemplares disponibles, se asigna el valor 'S' (suficiente stock); 
+en caso contrario, se asigna 'N' (stock crítico).*/
+
+    CASE
+        WHEN
+            (
+                COUNT(DISTINCT e.ejemplarid)
                 -
-                SUM(
-                    CASE
-                        WHEN p.ejemplarid IS NOT NULL THEN 1
-                        ELSE 0
+                COUNT(
+                    DISTINCT CASE
+                        WHEN p.empleadoid IN (190, 180, 150)
+                        THEN e.ejemplarid
                     END
-                ) > 2 THEN 'S'
-            ELSE 'N'
-        END AS stock_critico
+                )
+            ) > 2
+        THEN 'S'
+        ELSE 'N'
+    END AS stock_critico
     FROM sn_libro l
     JOIN sn_ejemplar e
         ON e.libroid = l.libroid
-    LEFT JOIN (
-        SELECT DISTINCT
-            p.libroid,
-            p.ejemplarid
-        FROM sn_prestamo p
-        WHERE p.empleadoid IN (190,180,150)
-          AND p.fecha_inicio >= TRUNC(ADD_MONTHS(SYSDATE, -24), 'MM')
-          AND p.fecha_inicio <  ADD_MONTHS(TRUNC(ADD_MONTHS(SYSDATE, -24), 'MM'), 1)
-    ) p
+    LEFT JOIN sn_prestamo p
         ON p.libroid    = e.libroid
-       AND p.ejemplarid = e.ejemplarid
+        AND p.ejemplarid = e.ejemplarid
+        AND p.fecha_inicio >= TO_DATE(EXTRACT(YEAR FROM SYSDATE) - 2 || '0101', 'YYYYMMDD')
+        AND p.fecha_inicio <  TO_DATE(EXTRACT(YEAR FROM SYSDATE) - 1 || '0101', 'YYYYMMDD')
+    WHERE EXISTS (
+        SELECT 1
+        FROM sn_prestamo p2
+        WHERE p2.libroid = l.libroid
+            AND p2.empleadoid IN (190, 180, 150)
+            AND p2.fecha_inicio >= TO_DATE(EXTRACT(YEAR FROM SYSDATE) - 2 || '0101', 'YYYYMMDD')
+            AND p2.fecha_inicio <  TO_DATE(EXTRACT(YEAR FROM SYSDATE) - 1 || '0101', 'YYYYMMDD'))
     GROUP BY
         l.libroid,
         l.nombre_libro
-    ORDER BY l.libroid ASC
-) t;
+    ORDER BY
+        l.libroid) t;
 
 --CONSULTA DE LA TABLA CONTROL_STOCK_LIBROS
 SELECT * FROM CONTROL_STOCK_LIBROS
@@ -211,6 +220,16 @@ ORDER BY p.fecha_entrega DESC;
 SELECT * FROM VW_DETALLE_MULTAS;
 
 --Caso 3.2: Creación de Índices
+
+--Limpieza de indices
+BEGIN
+    EXECUTE IMMEDIATE 'DROP INDEX IDX_PRESTAMO_ANIO_TERMINO';
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL;
+END;
+/
+
 /*El plan de ejecución se ve un FULL sobre la tabla PRESTAMO
 debido al uso de la función EXTRACT(YEAR FROM fecha_termino) en el WHERE.*/
 
