@@ -53,7 +53,7 @@ GRANT SELECT ON PRY2205_USER1.prestamo TO PRY2205_ROL_P;
 
 /* ---- Script ejecutado por usuario PRY2205_USER1 ---- */
 
---SE EJECULA EL SCRIPT CON LA CREACION Y LA INSERCION DE DATOS 
+--SE EJECUTA EL SCRIPT CON LA CREACION Y LA INSERCION DE DATOS 
 
 --Se crean los sinonimos publicos para el user2
 
@@ -221,7 +221,7 @@ SELECT * FROM VW_DETALLE_MULTAS;
 
 --Caso 3.2: Creación de Índices
 
---Limpieza de indices
+--Limpieza de indice
 BEGIN
     EXECUTE IMMEDIATE 'DROP INDEX IDX_PRESTAMO_ANIO_TERMINO';
 EXCEPTION
